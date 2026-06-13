@@ -48,7 +48,8 @@
             background-color: #1e293b !important;
         }
         .dark-map .leaflet-tile-container {
-            filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(90%);
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(95%);
+            -webkit-filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(95%);
         }
         /* Custom scrollbar */
         ::-webkit-scrollbar {
@@ -856,9 +857,9 @@
                 attributionControl: false
             }).setView([initialLat, initialLng], 16);
             
-            // Add custom styled Dark Matter tiles
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                maxZoom: 20
+            // Add custom styled Dark Matter tiles (using OSM + CSS filter inversion)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19
             }).addTo(map);
             
             // Apply dark map class styles to viewport container
