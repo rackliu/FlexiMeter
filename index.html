@@ -157,15 +157,15 @@
           <div
             class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-xl"
           ></div>
-          <div onclick="openHistoryModal()" class="flex items-center justify-between cursor-pointer mb-4 hover:opacity-80 transition-all select-none">
+          <div class="flex items-center justify-between mb-4 select-none">
             <h3
               class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center"
             >
               <i class="fa-solid fa-chart-line mr-1.5 text-emerald-500"></i>今日行駛統計
             </h3>
-            <span class="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all flex items-center gap-1">
+            <button onclick="openHistoryModal()" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all flex items-center gap-1 cursor-pointer">
               <i class="fa-solid fa-clock-rotate-left text-[10px]"></i>歷史紀錄 <i class="fa-solid fa-chevron-right text-[10px]"></i>
-            </span>
+            </button>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="border-r border-slate-800/80 pr-2">
