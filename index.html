@@ -1534,7 +1534,6 @@
         if (viewName === "idle") {
           loadTodayStats();
           loadRideHistory();
-          autoSelectDefaultRateProfile(true);
         }
       }
 
@@ -2191,6 +2190,7 @@
       // CONFIRM & RESET BACK TO IDLE
       function confirmReset() {
         switchView("idle");
+        autoSelectDefaultRateProfile(true);
       }
 
       // Register Service Worker from Blob for full single-file PWA support
