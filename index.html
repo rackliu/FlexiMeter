@@ -83,6 +83,77 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #475569;
       }
+
+      /* Light theme checkout (QR-code scanning optimization) */
+      body.checkout-bright {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+      }
+      body.checkout-bright header {
+        background-color: rgba(248, 250, 252, 0.9) !important;
+        border-color: #e2e8f0 !important;
+        color: #0f172a !important;
+      }
+      body.checkout-bright header h1 {
+        color: #0f172a !important;
+      }
+      body.checkout-bright header #gps-status {
+        background-color: #f1f5f9 !important;
+        border-color: #cbd5e1 !important;
+      }
+      body.checkout-bright header #gps-text {
+        color: #475569 !important;
+      }
+      body.checkout-bright #view-summary > div {
+        background-color: #f8fafc !important;
+        border-color: #e2e8f0 !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+      }
+      body.checkout-bright #view-summary .text-slate-350,
+      body.checkout-bright #view-summary .text-slate-300 {
+        color: #1e293b !important;
+      }
+      body.checkout-bright #view-summary .text-slate-400 {
+        color: #475569 !important;
+      }
+      body.checkout-bright #view-summary .text-slate-500 {
+        color: #64748b !important;
+      }
+      body.checkout-bright #view-summary .text-white {
+        color: #0f172a !important;
+      }
+      body.checkout-bright #view-summary .border-slate-800 {
+        border-color: #cbd5e1 !important;
+      }
+      body.checkout-bright #view-summary #receipt-total {
+        color: #d97706 !important;
+      }
+      body.checkout-bright #view-summary #payment-qr-placeholder {
+        background-color: rgba(241, 245, 249, 0.95) !important;
+      }
+      body.checkout-bright #view-summary #payment-qr-placeholder span {
+        color: #475569 !important;
+      }
+      body.checkout-bright #view-summary #payment-qr-placeholder i {
+        color: #64748b !important;
+      }
+      body.checkout-bright #view-summary #payment-qr-placeholder div,
+      body.checkout-bright #view-summary div.w-36 {
+        background-color: #ffffff !important;
+        border-color: #cbd5e1 !important;
+      }
+      body.checkout-bright #view-summary button {
+        background-color: #059669 !important;
+        color: #ffffff !important;
+      }
+      body.checkout-bright #view-summary button:hover {
+        background-color: #047857 !important;
+      }
+      body.checkout-bright footer {
+        background-color: rgba(248, 250, 252, 0.8) !important;
+        border-color: #cbd5e1 !important;
+        color: #64748b !important;
+      }
     </style>
   </head>
   <body
@@ -1534,6 +1605,13 @@
         if (viewName === "idle") {
           loadTodayStats();
           loadRideHistory();
+        }
+
+        // Control screen brightness simulation by toggling light mode on summary
+        if (viewName === "summary") {
+          document.body.classList.add("checkout-bright");
+        } else {
+          document.body.classList.remove("checkout-bright");
         }
       }
 
