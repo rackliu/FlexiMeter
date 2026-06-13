@@ -138,6 +138,23 @@
                 </div>
             </div>
 
+            <!-- Ride History Card -->
+            <div class="bg-slate-900/40 p-5 rounded-2xl border border-slate-850 shadow-lg space-y-4">
+                <div class="flex items-center justify-between">
+                    <label class="block text-sm font-semibold text-slate-300"><i class="fa-solid fa-clock-rotate-left mr-1.5 text-emerald-500"></i>最近乘車紀錄</label>
+                    <button onclick="clearRideHistory()" id="btn-clear-history" class="text-[10px] text-rose-450 hover:text-rose-400 transition-all font-semibold hidden cursor-pointer">
+                        <i class="fa-solid fa-trash mr-1"></i>清除紀錄
+                    </button>
+                </div>
+                <div id="history-list-container" class="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                    <!-- History rows populated dynamically -->
+                    <div class="text-center py-4 text-xs text-slate-500">
+                        <i class="fa-solid fa-folder-open block text-lg mb-1.5 opacity-55"></i>
+                        尚無歷史乘車紀錄
+                    </div>
+                </div>
+            </div>
+
             <!-- Start Button Section -->
             <div class="flex flex-col space-y-3 pt-4">
                 <button onclick="startTrip()" class="w-full py-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black text-xl tracking-widest shadow-[0_0_30px_rgba(16,185,129,0.3)] transition-all duration-300 flex items-center justify-center space-x-3 cursor-pointer">
@@ -604,6 +621,108 @@
             updateStatsUI();
         }
 
+        // Ride History Management
+        function loadRideHistory() {
+            let history = [];
+            const savedHistory = localStorage.getItem('fleximeter_history');
+            if (savedHistory) {
+                try {
+                    history = JSON.parse(savedHistory);
+                } catch (e) {
+                    console.error('Failed to parse ride history', e);
+                }
+            }
+            renderRideHistory(history);
+        }
+
+        function renderRideHistory(history) {
+            const container = document.getElementById('history-list-container');
+            const clearBtn = document.getElementById('btn-clear-history');
+            
+            if (!container) return;
+
+            if (history.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-4 text-xs text-slate-500">
+                        <i class="fa-solid fa-folder-open block text-lg mb-1.5 opacity-55"></i>
+                        尚無歷史乘車紀錄
+                    </div>
+                `;
+                if (clearBtn) clearBtn.classList.add('hidden');
+                return;
+            }
+
+            if (clearBtn) clearBtn.classList.remove('hidden');
+
+            let html = '';
+            // Only show latest 10 items
+            history.slice(0, 10).forEach(item => {
+                const dateObj = new Date(item.endTime);
+                const dateStr = `${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getDate().toString().padStart(2, '0')} ${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
+                const kmStr = (item.distance / 1000).toFixed(2);
+                
+                const minutes = Math.floor(item.duration / 60);
+                const seconds = item.duration % 60;
+                const timeStr = minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
+                
+                html += `
+                    <div class="bg-slate-950/60 px-3 py-2 rounded-lg border border-slate-900 flex justify-between items-center text-xs">
+                        <div class="space-y-0.5">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-slate-300 font-medium">${dateStr}</span>
+                                <span class="px-1 py-0.5 rounded text-[8px] font-bold ${item.rateProfile.includes('夜間') ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}">${item.rateProfile}</span>
+                            </div>
+                            <div class="text-[10px] text-slate-500">
+                                ${kmStr} km · ${timeStr} · 等候 ${item.timeIdle}秒
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-sm font-black text-amber-500 font-digital">NT$ ${item.fare}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function saveTripToHistory() {
+            let history = [];
+            const savedHistory = localStorage.getItem('fleximeter_history');
+            if (savedHistory) {
+                try {
+                    history = JSON.parse(savedHistory);
+                } catch (e) {}
+            }
+
+            const tripRecord = {
+                id: Date.now(),
+                startTime: trip.startTime ? trip.startTime.toISOString() : new Date().toISOString(),
+                endTime: trip.endTime ? trip.endTime.toISOString() : new Date().toISOString(),
+                rateProfile: currentRateProfile === 'day' ? '日間費率' : '夜間加成',
+                distance: trip.distanceTotal,
+                timeIdle: trip.timeIdle,
+                duration: trip.totalSeconds,
+                fare: Math.round(trip.fare)
+            };
+
+            history.unshift(tripRecord);
+            
+            // Limit to last 30 entries
+            if (history.length > 30) {
+                history = history.slice(0, 30);
+            }
+
+            localStorage.setItem('fleximeter_history', JSON.stringify(history));
+        }
+
+        function clearRideHistory() {
+            if (confirm("確定要清除所有乘車紀錄嗎？")) {
+                localStorage.removeItem('fleximeter_history');
+                loadRideHistory();
+                speak("歷史紀錄已清除");
+            }
+        }
+
         // View Switcher (State machine helper)
         function switchView(viewName) {
             currentState = viewName.toUpperCase();
@@ -616,6 +735,7 @@
 
             if (viewName === 'idle') {
                 loadTodayStats();
+                loadRideHistory();
             }
         }
 
@@ -1117,6 +1237,7 @@
             todayStats.trips += 1;
             todayStats.earnings += Math.round(trip.fare);
             saveTodayStats();
+            saveTripToHistory();
 
             // Speak ending text
             speak(`行程結束，車資共計 ${Math.round(trip.fare)} 元。謝謝搭乘`);
