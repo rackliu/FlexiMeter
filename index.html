@@ -484,6 +484,8 @@
         let pathPolyline = null;
         let currentMarker = null;
         let wakeLock = null;
+        let lastTickTime = null;
+        let backgroundGapSeconds = 0;
 
         // Long press handling parameters
         let endTripPressTimer = null;
@@ -508,6 +510,22 @@
                     () => updateGpsStatus(null)
                 );
             }
+
+            // Handle visibility change to restore wake lock and force GPS refresh when coming back
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && trip.active) {
+                    requestWakeLock();
+                    if (navigator.geolocation && !settings.simulateGps) {
+                        navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                                handleNewCoordinates(pos.coords.latitude, pos.coords.longitude, pos.timestamp);
+                            },
+                            () => {},
+                            { enableHighAccuracy: true }
+                        );
+                    }
+                }
+            });
         });
 
         // Load settings from localStorage
@@ -909,6 +927,9 @@
                 lastActiveSpeed: 0
             };
 
+            lastTickTime = Date.now();
+            backgroundGapSeconds = 0;
+
             // Switch to driving view state
             switchView('driving');
             
@@ -1061,6 +1082,13 @@
 
                     trip.lastActiveSpeed = speedKmh;
 
+                    if (backgroundGapSeconds > 0) {
+                        if (speedKmh < settings.speedThreshold) {
+                            trip.timeIdle += backgroundGapSeconds;
+                        }
+                        backgroundGapSeconds = 0;
+                    }
+
                     // Defensive filtering: ignore unrealistic spikes (> 150 km/h)
                     // Or extremely small movements (< 2m) to prevent static GPS jitter accumulation
                     if (speedKmh < 150) {
@@ -1092,19 +1120,39 @@
             updateBillingDisplays();
         }
 
-        // Live billing ticker (Runs every 1s)
         function runBillingTicker() {
             if (!trip.active) return;
 
-            trip.totalSeconds++;
+            const now = Date.now();
+            if (!lastTickTime) lastTickTime = now;
+            const elapsed = Math.floor((now - lastTickTime) / 1000);
+            if (elapsed <= 0) return;
 
-            // Check if speed qualifies as stationary/idle
-            // If GPS coordinates have not arrived in the last 4 seconds, we assume vehicle is stationary
-            const timeSinceLastGps = trip.lastCoords ? (Date.now() - trip.lastCoords.time) / 1000 : 0;
+            const timeSinceLastGps = trip.lastCoords ? (now - trip.lastCoords.time) / 1000 : 0;
             const isStationary = (trip.lastActiveSpeed < settings.speedThreshold) || (timeSinceLastGps > 4);
 
-            if (isStationary) {
-                trip.timeIdle++;
+            if (elapsed === 1) {
+                trip.totalSeconds++;
+                if (isStationary) {
+                    trip.timeIdle++;
+                }
+                lastTickTime += 1000;
+            } else {
+                // A background suspension gap occurred!
+                backgroundGapSeconds += elapsed;
+                trip.totalSeconds += elapsed;
+                lastTickTime += elapsed * 1000;
+
+                // Request an immediate GPS check to resolve the gap
+                if (navigator.geolocation && !settings.simulateGps) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            handleNewCoordinates(pos.coords.latitude, pos.coords.longitude, pos.timestamp);
+                        },
+                        () => {},
+                        { enableHighAccuracy: true }
+                    );
+                }
             }
 
             calculateActiveFare();
@@ -1230,6 +1278,12 @@
             
             stopLocationGathering();
             releaseWakeLock();
+
+            // Resolve any pending background gap as idle waiting time
+            if (backgroundGapSeconds > 0) {
+                trip.timeIdle += backgroundGapSeconds;
+                backgroundGapSeconds = 0;
+            }
 
             // Run final fare calculation one last time
             calculateActiveFare();
