@@ -1271,11 +1271,11 @@
                 qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${safeUrl}`;
                 qrImage.classList.remove('hidden');
                 qrPlaceholder.classList.add('hidden');
-                qrInstructions.textContent = "請司機開啟此頁面以利乘客付款";
+                qrInstructions.textContent = "請乘客使用手機掃描上方二維碼進行付款";
             } else {
                 qrImage.classList.add('hidden');
                 qrPlaceholder.classList.remove('hidden');
-                qrInstructions.textContent = "支援現金付款";
+                qrInstructions.textContent = "支援現金或實體行動條碼付款";
             }
 
             // Hide warning banner
