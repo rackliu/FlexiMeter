@@ -1608,7 +1608,7 @@
         }
 
         // Control screen brightness simulation by toggling light mode on summary
-        if (viewName === "summary") {
+        if (viewName === "summary" && settings.paymentUrl && settings.paymentUrl.trim() !== "") {
           document.body.classList.add("checkout-bright");
         } else {
           document.body.classList.remove("checkout-bright");
