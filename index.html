@@ -2648,10 +2648,18 @@ const TAIWAN_ETAG_GANTRIES = [
 
         lastActiveSpeed: 0, // km/h
 
-        etagFare: 0,
-
-        etagCooldowns: {},
-
+        etagFare: 0,
+
+
+
+        etagCooldowns: {},
+
+
+
+        etagTracking: {},
+
+
+
       };
 
 
@@ -2808,14 +2816,34 @@ const TAIWAN_ETAG_GANTRIES = [
 
                 (pos) => {
 
-                  handleNewCoordinates(
-
-                    pos.coords.latitude,
-
-                    pos.coords.longitude,
-
-                    pos.timestamp,
-
+                  handleNewCoordinates(
+
+
+
+                    pos.coords.latitude,
+
+
+
+                    pos.coords.longitude,
+
+
+
+                    pos.timestamp,
+
+
+
+                    null,
+
+
+
+                    pos.coords.accuracy,
+
+
+
+                    pos.coords.speed,
+
+
+
                   );
 
                 },
@@ -4367,10 +4395,18 @@ const TAIWAN_ETAG_GANTRIES = [
 
           lastActiveSpeed: 0,
 
-          etagFare: 0,
-
-          etagCooldowns: {},
-
+          etagFare: 0,
+
+
+
+          etagCooldowns: {},
+
+
+
+          etagTracking: {},
+
+
+
         };
 
 
@@ -4519,13 +4555,13 @@ const TAIWAN_ETAG_GANTRIES = [
 
 
 
-            // Filter low quality nodes
-
-            if (accuracy > 40) return;
-
-
-
-            handleNewCoordinates(lat, lng, timestamp);
+            // Filter low quality nodes
+
+            if (accuracy > 40) return;
+
+
+
+            handleNewCoordinates(lat, lng, timestamp, null, accuracy, position.coords.speed);
 
           },
 
@@ -4595,7 +4631,7 @@ const TAIWAN_ETAG_GANTRIES = [
 
           } else if (tickCount <= 40) {
 
-            speedMps = 12.5; // Cruising speed 45 km/h (12.5 m/s)
+            speedMps = 16.7; // Cruising speed 60 km/h (16.7 m/s) [Threshold Test]
 
           } else if (tickCount <= 50) {
 
@@ -4649,9 +4685,11 @@ const TAIWAN_ETAG_GANTRIES = [
 
 
 
-          const pseudoTimestamp = Date.now();
-
-          handleNewCoordinates(lat, lng, pseudoTimestamp, speedMps * 3.6);
+          const pseudoTimestamp = Date.now();
+
+
+
+          handleNewCoordinates(lat, lng, pseudoTimestamp, speedMps * 3.6, 5, speedMps);
 
         }, 1500); // Update every 1.5s
 
@@ -4661,16 +4699,20 @@ const TAIWAN_ETAG_GANTRIES = [
 
       // Coordinate consumer logic
 
-      function handleNewCoordinates(
-
-        lat,
-
-        lng,
-
-        timestamp,
-
-        forcedSpeedKmh = null,
-
+      function handleNewCoordinates(
+
+        lat,
+
+        lng,
+
+        timestamp,
+
+        forcedSpeedKmh = null,
+
+        accuracy = null,
+
+        gpsSpeedMps = null,
+
       ) {
 
         if (!trip.active) return;
@@ -4771,12 +4813,28 @@ const TAIWAN_ETAG_GANTRIES = [
 
 
 
-        // eTag toll calculation
-
-        if (settings.enableEtag) {
-
-          checkEtagGantryCollision(lat, lng, timestamp);
-
+        // eTag toll calculation
+
+        if (settings.enableEtag) {
+
+          let currentSpeed = 0;
+
+          if (gpsSpeedMps !== null && gpsSpeedMps !== undefined && gpsSpeedMps >= 0) {
+
+            currentSpeed = gpsSpeedMps * 3.6;
+
+          } else if (forcedSpeedKmh !== null) {
+
+            currentSpeed = forcedSpeedKmh;
+
+          } else if (trip.lastActiveSpeed) {
+
+            currentSpeed = trip.lastActiveSpeed;
+
+          }
+
+          checkEtagGantryCollision(lat, lng, timestamp, accuracy, currentSpeed);
+
         }
 
 
@@ -4807,87 +4865,139 @@ const TAIWAN_ETAG_GANTRIES = [
 
 
 
-      // Taiwan eTag toll collision check
-
-      function checkEtagGantryCollision(lat, lng, timestamp) {
-
-        if (!trip.etagCooldowns) {
-
-          trip.etagCooldowns = {};
-
-        }
-
-
-
-        for (let i = 0; i < TAIWAN_ETAG_GANTRIES.length; i++) {
-
-          const gantry = TAIWAN_ETAG_GANTRIES[i];
-
-          const lastTriggerTime = trip.etagCooldowns[gantry.id] || 0;
-
-          
-
-          // 5-minute cooldown (300,000 milliseconds)
-
-          if (timestamp - lastTriggerTime < 300000) {
-
-            continue;
-
-          }
-
-
-
-          // Calculate distance using existing Haversine function
-
-          const dist = calculateDistance(lat, lng, gantry.lat, gantry.lng);
-
-          if (dist < 100) {
-
-            // Triggered!
-
-            trip.etagCooldowns[gantry.id] = timestamp;
-
-            if (!trip.etagFare) {
-
-              trip.etagFare = 0;
-
-            }
-
-            trip.etagFare += gantry.price;
-
-
-
-            // Recalculate fare & refresh HUD
-
-            calculateActiveFare();
-
-            updateBillingDisplays();
-
-
-
-            // Speak if TTS enabled
-
-            if (settings.enableVoice) {
-
-              speak(`國道計費，通過${gantry.name}，過路費${gantry.price}元`);
-
-            }
-
-
-
-            // Show Toast
-
-            showToast(`[國道計費] 通過門架：${gantry.name}，過路費 +${gantry.price} TWD`);
-
-          }
-
-        }
-
-      }
-
-
-
-      // Dynamic Toast notifications
+      // Calculate distance from point P (latP, lngP) to line segment AB (latA, lngA) -> (latB, lngB)
+      function calculateSegmentDistance(latP, lngP, latA, lngA, latB, lngB) {
+        const latRef = latP * Math.PI / 180;
+        const cosLat = Math.cos(latRef);
+
+        const xp = lngP * cosLat;
+        const yp = latP;
+        const xa = lngA * cosLat;
+        const ya = latA;
+        const xb = lngB * cosLat;
+        const yb = latB;
+
+        const dx = xb - xa;
+        const dy = yb - ya;
+
+        if (dx === 0 && dy === 0) {
+          return calculateDistance(latP, lngP, latA, lngA);
+        }
+
+        let t = ((xp - xa) * dx + (yp - ya) * dy) / (dx * dx + dy * dy);
+        t = Math.max(0, Math.min(1, t));
+
+        const xc = xa + t * dx;
+        const yc = ya + t * dy;
+
+        const latC = yc;
+        const lngC = xc / cosLat;
+
+        return calculateDistance(latP, lngP, latC, lngC);
+      }
+
+      // Taiwan eTag toll collision check with advanced filtering
+      function checkEtagGantryCollision(lat, lng, timestamp, accuracy, currentSpeed) {
+        if (!trip.etagCooldowns) {
+          trip.etagCooldowns = {};
+        }
+        if (!trip.etagTracking) {
+          trip.etagTracking = {};
+        }
+
+        // 1. 時速門檻過濾 (Speed threshold filter)
+        // 當 GPS 回傳之即時車速（currentSpeed）小於 50 km/h 時，系統應自動忽略任何門架碰撞
+        if (currentSpeed !== null && currentSpeed !== undefined && currentSpeed < 50) {
+          return;
+        }
+
+        // 2. 訊號精度過濾 (Accuracy filter)
+        // 若當前 GPS 的定位誤差半徑 accuracy 大於 25 公尺，代表處於高架橋下遮蔽或訊號不佳狀態，此時應暫停門架感應計算。
+        if (accuracy !== null && accuracy !== undefined && accuracy > 25) {
+          return;
+        }
+
+        for (let i = 0; i < TAIWAN_ETAG_GANTRIES.length; i++) {
+          const gantry = TAIWAN_ETAG_GANTRIES[i];
+          const lastTriggerTime = trip.etagCooldowns[gantry.id] || 0;
+          
+          // 5-minute cooldown (300,000 milliseconds)
+          if (timestamp - lastTriggerTime < 300000) {
+            continue;
+          }
+
+          // Calculate distance to gantry center
+          const dist = calculateDistance(lat, lng, gantry.lat, gantry.lng);
+
+          // Calculate line segment distance if we have previous coordinates
+          let segDist = dist;
+          if (trip.lastCoords) {
+            segDist = calculateSegmentDistance(
+              gantry.lat,
+              gantry.lng,
+              trip.lastCoords.lat,
+              trip.lastCoords.lng,
+              lat,
+              lng
+            );
+          }
+
+          // 3. 連續軌跡鎖定 (Continuous track lock)
+          // 偵測半徑設為 120m 以保留足夠的軌跡點，同時預期車輛軌跡必須通過小於 50m 的核心感應區 (minSegDist < 50m) 且至少有兩個連續點以驗證。
+          const detectRadius = 120;
+          if (dist < detectRadius || segDist < detectRadius) {
+            if (!trip.etagTracking[gantry.id]) {
+              trip.etagTracking[gantry.id] = {
+                points: [],
+                minSegDist: Infinity
+              };
+            }
+
+            const track = trip.etagTracking[gantry.id];
+            
+            // 過濾掉超過 20 秒的舊軌跡點，以防止跨旅程或過久以前的訊號影響
+            track.points = track.points.filter(p => timestamp - p.time <= 20000);
+            
+            // 加入當前軌跡點
+            track.points.push({ lat, lng, time: timestamp, dist });
+            
+            // 更新此段軌跡中最接近門架的距離 (segment distance)
+            if (segDist < track.minSegDist) {
+              track.minSegDist = segDist;
+            }
+
+            // 觸發條件：
+            // - 在 20 秒的追蹤窗口內至少有 2 個點進入 120m 感應區（確認是連續軌跡而非單次 GPS 跳點）
+            // - 整段軌跡的最短線段距離小於 50m（確認車輛確實通過門架，而非行經 80m 外之平行道路或僅邊緣擦邊）
+            if (track.points.length >= 2 && track.minSegDist < 50) {
+              // Triggered!
+              trip.etagCooldowns[gantry.id] = timestamp;
+              
+              // 清除該門架的追蹤狀態
+              delete trip.etagTracking[gantry.id];
+
+              if (!trip.etagFare) {
+                trip.etagFare = 0;
+              }
+              trip.etagFare += gantry.price;
+
+              // Recalculate fare & refresh HUD
+              calculateActiveFare();
+              updateBillingDisplays();
+
+              // Speak if TTS enabled
+              if (settings.enableVoice) {
+                speak(`國道計費，通過${gantry.name}，過路費${gantry.price}元`);
+              }
+
+              // Show Toast
+              showToast(`[國道計費] 通過門架：${gantry.name}，過路費 +${gantry.price} TWD`);
+            }
+          }
+        }
+      }
+
+            // Dynamic Toast notifications
 
       function showToast(message) {
 
@@ -5009,14 +5119,34 @@ const TAIWAN_ETAG_GANTRIES = [
 
               (pos) => {
 
-                handleNewCoordinates(
-
-                  pos.coords.latitude,
-
-                  pos.coords.longitude,
-
-                  pos.timestamp,
-
+                handleNewCoordinates(
+
+
+
+                  pos.coords.latitude,
+
+
+
+                  pos.coords.longitude,
+
+
+
+                  pos.timestamp,
+
+
+
+                  null,
+
+
+
+                  pos.coords.accuracy,
+
+
+
+                  pos.coords.speed,
+
+
+
                 );
 
               },
